@@ -18,3 +18,7 @@ Gym environments to similate various synthetic price signals:
 Experiments were performed using the Autonomous Learning Library (https://github.com/cpnota/autonomous-learning-library) to streamline the implementation of the agent and the underlying learning algorithms and focus on the environment. So far, experiments have been run using an A2C agent with standard fully connected layers of 64 neurons for the actor and critic networks.
 
 The RL approach is compared to a deterministic baseline which compute autocorrelation and decides to play momentum or mean-reversion based on that. On such synthetic signals, this baseline realizes theoretical optimal average performance.
+
+To check results, during and after training (make sure tensorboard is installed):
+* run tensorboard --logdir runs in a terminal
+* go to http://localhost:6006/
