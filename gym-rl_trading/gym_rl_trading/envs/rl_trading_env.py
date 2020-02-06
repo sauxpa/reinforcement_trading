@@ -47,6 +47,11 @@ class RLTradingEnv(gym.Env):
         pass
 
     @property
+    @abc.abstractmethod
+    def description(self):
+        pass
+
+    @property
     def dt(self):
         return self.current_step / self.max_steps * self.horizon
 
@@ -56,12 +61,14 @@ class RLTradingEnv(gym.Env):
         self.obs.popleft()
         new_return = self.new_return()
         self.obs.append(new_return)
+        self.last_price = self.price
         self.price += new_return
         return self.obs
 
     def _take_action(self, action):
         current_price = self.price
-
+        self.last_balance = self.balance
+        self.last_shares_held = self.shares_held
         amount = 1
 
         if action == 0:
@@ -78,17 +85,19 @@ class RLTradingEnv(gym.Env):
             gain = shares_sold * current_price
             self.balance += gain
 
-        self.pnl = self.balance + self.shares_held * current_price - self.net_worth
-        self.pnl_history.append(self.pnl)
-        self.net_worth += self.pnl
-
-        if self.net_worth > self.max_net_worth:
-            self.max_net_worth = self.net_worth
-
     def step(self, action):
         # Execute one time step within the environment
         self._take_action(action)
         self.current_step += 1
+
+        obs = self._next_observation()
+
+        self.pnl = self.shares_held * self.price \
+        - self.last_shares_held * self.last_price \
+        + self.balance \
+        - self.last_balance
+
+        self.pnl_history.append(self.pnl)
 
         if self.reward_mode == 'pnl' or np.std(self.pnl_history) <= 1e-3:
             reward = self.pnl
@@ -98,7 +107,6 @@ class RLTradingEnv(gym.Env):
             raise Exception('{} not an allowed reward mode.'.format(self.reward_mode))
 
         done = self.current_step >= self.max_steps
-        obs = self._next_observation()
 
         return obs, reward, done, {}
 
@@ -109,18 +117,14 @@ class RLTradingEnv(gym.Env):
             self.current_step += 1
             self.obs.append(self.new_return())
 
-        init_price = 0.9 + 0.2 * np.random.rand()
-        self.price = np.sum(self.obs) + init_price
+        self.init_price = 0.9 + 0.2 * np.random.rand()
+        self.price = np.sum(self.obs) + self.init_price
 
     def reset(self):
         """ Reset the state of the environment to an initial state.
         """
         self.balance = self.init_balance
-        self.net_worth = self.init_balance
-        self.max_net_worth = self.init_balance
         self.shares_held = 0
-        self.total_shares_sold = 0
-        self.total_sales_value = 0
 
         self.pnl = 0
         self.pnl_history = []
@@ -129,16 +133,20 @@ class RLTradingEnv(gym.Env):
 
         return self._next_observation()
 
-    def render(self, mode='human', close=False):
-        # Render the environment to the screen
-        profit = self.net_worth - self.init_balance
 
-        print(f'Step: {self.current_step}')
-        print(f'Balance: {self.balance}')
-        print(
-            f'Shares held: {self.shares_held}')
-        print(
-            f'Total PnL: {self.net_worth} (Max PnL: {self.max_net_worth})')
+class RLTradingEnvBM_NoTrend(RLTradingEnv):
+    def __init__(self):
+        super().__init__()
+        self.drift = 0 * ONE_PCT
+        self.vol = 20 * ONE_PCT
+
+    @property
+    def description(self):
+        return 'Brownian prices, no trend, no profitable strategy.'
+
+    def new_return(self):
+        return self.drift * self.dt \
+        + self.vol * np.random.randn() * np.sqrt(self.dt)
 
 
 class RLTradingEnvBM_Trend(RLTradingEnv):
@@ -147,16 +155,9 @@ class RLTradingEnvBM_Trend(RLTradingEnv):
         self.drift = 5 * ONE_PCT
         self.vol = 20 * ONE_PCT
 
-    def new_return(self):
-        return self.drift * self.dt \
-        + self.vol * np.random.randn() * np.sqrt(self.dt)
-
-
-class RLTradingEnvBM_NoTrend(RLTradingEnv):
-    def __init__(self):
-        super().__init__()
-        self.drift = 0 * ONE_PCT
-        self.vol = 20 * ONE_PCT
+    @property
+    def description(self):
+        return 'Brownian prices, +5% trend, profitable long strategy.'
 
     def new_return(self):
         return self.drift * self.dt \
@@ -166,12 +167,16 @@ class RLTradingEnvBM_NoTrend(RLTradingEnv):
 class RLTradingEnvBM_Cyclical(RLTradingEnv):
     def __init__(self):
         super().__init__()
-        self.drift = 0 * ONE_PCT
+        self.drift = 10  * ONE_PCT
         self.vol = 20 * ONE_PCT
         self.n_cycles = 10
 
+    @property
+    def description(self):
+        return 'Brownian prices carried by a cyclical trend. Profitable long-short strategy based on the position in the cycle.'
+
     def new_return(self):
-        return np.sin(2*np.pi/self.horizon*self.dt*self.n_cycles) * self.dt \
+        return self.drift * np.sin(2*np.pi/self.horizon*self.dt*self.n_cycles) * self.dt \
         + self.vol * np.random.randn() * np.sqrt(self.dt)
 
 
@@ -189,9 +194,9 @@ class RLTradingEnvFBM(RLTradingEnv):
         pass
 
     def reset_returns(self):
-        init_price = 90 + 20 * np.random.rand()
+        self.init_price = 90 + 20 * np.random.rand()
 
-        X = FBM(x0=init_price,
+        X = FBM(x0=self.init_price,
                 T=self.horizon,
                 scheme_steps=self.max_steps,
                 drift=self.drift,
@@ -211,7 +216,7 @@ class RLTradingEnvFBM(RLTradingEnv):
             self.current_step += 1
             self.obs.append(self.new_return())
 
-        self.price = np.sum(self.obs) + init_price
+        self.price = np.sum(self.obs) + self.init_price
 
     def new_return(self):
         return self.returns[self.current_step-1]
@@ -227,17 +232,14 @@ class RLTradingEnvFBMBaseline(RLTradingEnvFBM):
     def __init__(self):
         super().__init__()
 
-    @property
-    def H(self):
-        """Hurst Index.
-        """
-        return 0.7
-
     def _take_action(self, action):
         current_price = self.price
+        self.last_balance = self.balance
+        self.last_shares_held = self.shares_held
+
         amount = 1
 
-        autocorr = acf(self.obs, fft=True)[1]
+        autocorr = acf(self.returns[:self.current_step], fft=True)[1]
         if autocorr > 0:
             # momentum
             action = 0 if self.obs[-1] > 0 else 1
@@ -259,17 +261,14 @@ class RLTradingEnvFBMBaseline(RLTradingEnvFBM):
             gain = shares_sold * current_price
             self.balance += gain
 
-        self.pnl = self.balance + self.shares_held * current_price - self.net_worth
-        self.pnl_history.append(self.pnl)
-        self.net_worth += self.pnl
-
-        if self.net_worth > self.max_net_worth:
-            self.max_net_worth = self.net_worth
-
 
 class RLTradingEnvFBM_07(RLTradingEnvFBM):
     def __init__(self):
         super().__init__()
+
+    @property
+    def description(self):
+        return 'Fractional Brownian prices, with local trend-following patterns.'
 
     @property
     def H(self):
@@ -283,6 +282,10 @@ class RLTradingEnvFBM_03(RLTradingEnvFBM):
         super().__init__()
 
     @property
+    def description(self):
+        return 'Fractional Brownian prices, with local mean-reversion patterns.'
+
+    @property
     def H(self):
         """Hurst Index.
         """
@@ -294,6 +297,10 @@ class RLTradingEnvFBMBaseline_07(RLTradingEnvFBMBaseline):
         super().__init__()
 
     @property
+    def description(self):
+        return 'Deterministic baseline with local trend-following patterns.'
+
+    @property
     def H(self):
         """Hurst Index.
         """
@@ -303,6 +310,10 @@ class RLTradingEnvFBMBaseline_07(RLTradingEnvFBMBaseline):
 class RLTradingEnvFBMBaseline_03(RLTradingEnvFBMBaseline):
     def __init__(self):
         super().__init__()
+
+    @property
+    def description(self):
+        return 'Deterministic baseline with local mean-reversion patterns.'
 
     @property
     def H(self):
@@ -327,6 +338,7 @@ class RLTradingEnvFBMAutoCorr(RLTradingEnvFBM):
         new_return = self.new_return()
 
         self.obs_ret.append(new_return)
+        self.last_price = self.price
         self.price += new_return
 
         obs = np.concatenate(
@@ -339,9 +351,9 @@ class RLTradingEnvFBMAutoCorr(RLTradingEnvFBM):
         return obs
 
     def reset_returns(self):
-        init_price = 90 + 20 * np.random.rand()
+        self.init_price = 90 + 20 * np.random.rand()
 
-        X = FBM(x0=init_price,
+        X = FBM(x0=self.init_price,
                 T=self.horizon,
                 scheme_steps=self.max_steps,
                 drift=self.drift,
@@ -361,12 +373,16 @@ class RLTradingEnvFBMAutoCorr(RLTradingEnvFBM):
             self.current_step += 1
             self.obs_ret.append(self.new_return())
 
-        self.price = np.sum(self.obs_ret) + init_price
+        self.price = np.sum(self.obs_ret) + self.init_price
 
 
 class RLTradingEnvFBMAutoCorr_07(RLTradingEnvFBMAutoCorr):
     def __init__(self):
         super().__init__()
+
+    @property
+    def description(self):
+        return 'Fractional Brownian prices, with local trend-following patterns. Observations are augmented vith the empirical autocorrelogram.'
 
     @property
     def H(self):
@@ -378,6 +394,10 @@ class RLTradingEnvFBMAutoCorr_07(RLTradingEnvFBMAutoCorr):
 class RLTradingEnvFBMAutoCorr_03(RLTradingEnvFBMAutoCorr):
     def __init__(self):
         super().__init__()
+
+    @property
+    def description(self):
+        return 'Fractional Brownian prices, with local mean-reversion patterns. Observations are augmented vith the empirical autocorrelogram.'
 
     @property
     def H(self):
