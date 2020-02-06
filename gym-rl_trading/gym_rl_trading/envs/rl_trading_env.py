@@ -62,17 +62,16 @@ class RLTradingEnv(gym.Env):
     def _take_action(self, action):
         current_price = self.price
 
-        action_type = action
         amount = 1
 
-        if action_type == 0:
+        if action == 0:
             # Buy amount % of balance in shares
             shares_bought = amount
             self.shares_held += shares_bought
             cost = shares_bought * current_price
             self.balance -= cost
 
-        elif action_type == 1:
+        elif action == 1:
             # Sell amount % of shares held
             shares_sold = amount
             self.shares_held -= shares_sold
@@ -178,7 +177,7 @@ class RLTradingEnvBM_Cyclical(RLTradingEnv):
 
 class RLTradingEnvFBM(RLTradingEnv):
     def __init__(self):
-        super().__init__()
+        super().__init__(n_lag=5)
         self.drift = 0 * ONE_PCT
         self.vol = 5
 
@@ -246,14 +245,14 @@ class RLTradingEnvFBMBaseline(RLTradingEnvFBM):
             # mean-reversion
             action = 1 if self.obs[-1] > 0 else 0
 
-        if action_type == 0:
+        if action == 0:
             # Buy amount % of balance in shares
             shares_bought = amount
             self.shares_held += shares_bought
             cost = shares_bought * current_price
             self.balance -= cost
 
-        elif action_type == 1:
+        elif action == 1:
             # Sell amount % of shares held
             shares_sold = amount
             self.shares_held -= shares_sold
@@ -315,7 +314,7 @@ class RLTradingEnvFBMBaseline_03(RLTradingEnvFBMBaseline):
 class RLTradingEnvFBMAutoCorr(RLTradingEnvFBM):
     def __init__(self):
         super().__init__()
-        self.n_autocorr = 10
+        self.n_autocorr = 3
         self.observation_space = spaces.Box(
             low=0,
             high=1,
