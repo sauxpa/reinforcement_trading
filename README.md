@@ -17,4 +17,4 @@ Gym environments to similate various synthetic price signals:
 ## experiment
 Experiments were performed using the Autonomous Learning Library (https://github.com/cpnota/autonomous-learning-library) to streamline the implementation of the agent and the underlying learning algorithms and focus on the environment. So far, experiments have been run using an A2C agent with standard fully connected layers of 64 neurons for the actor and critic networks.
 
-Note that the fBM statistical signal is weak: even a baseline strategy (calculting autocorrelation on recent returns and going long or short based on the sign of autocorrelation and the last return) is barely successful. Therefore the task of learning this hidden statistical information in a very noisy environment is very difficult.
+The RL approach is compared to a deterministic baseline which compute autocorrelation and decides to play momentum or mean-reversion based on that. On such synthetic signals, this baseline realizes theoretical optimal average performance.
