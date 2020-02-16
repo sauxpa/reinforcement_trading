@@ -22,3 +22,8 @@ The RL approach is compared to a deterministic baseline which compute autocorrel
 To check results, during and after training (make sure tensorboard is installed):
 * run tensorboard --logdir runs in a terminal
 * go to http://localhost:6006/
+
+
+<img src="./rl_trading_baseline_H07.svg"
+     alt="Deterministic baseline on H=0.7 fBM"
+     style="float: left; margin-right: 10px;" />
