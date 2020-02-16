@@ -23,7 +23,25 @@ To check results, during and after training (make sure tensorboard is installed)
 * run tensorboard --logdir runs in a terminal
 * go to http://localhost:6006/
 
+## analyse_total_pnl
+Small script to read .csv downloaded from tensorboard and estimate total PnL.
 
+Example command line: 
+
+python analyse_total_pnl.py -f 'run-_a2c 9547638 2020-02-16 19_44_14.434822-tag-rl_trading-v3_evaluation_returns_episode.csv' -p True -t 'A2C trader with 64 ReLU neurons, fBM signal, H=0.7'
+
+## A few images
+
+**Deterministic baseline, H=0,7 fBM**
 <img src="./rl_trading_baseline_H07.svg"
      alt="Deterministic baseline on H=0.7 fBM"
+     style="float: left; margin-right: 10px;" />
+
+**A2C, H=0,7 fBM**
+<img src="./rl_trading_a2c_H07.svg"
+     alt="A2C on H=0.7 fBM"
+     style="float: left; margin-right: 10px;" />
+     
+<img src="./a2c_H07.png"
+     alt="A2C on H=0.7 fBM total pnl"
      style="float: left; margin-right: 10px;" />
