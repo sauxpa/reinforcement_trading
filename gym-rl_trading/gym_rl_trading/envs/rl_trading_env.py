@@ -15,7 +15,7 @@ class RLTradingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self,
-                 n_lag=500,
+                 n_lag=50,
                  init_balance=0,
                  max_steps=1000,
                  horizon=2.0,
@@ -36,8 +36,9 @@ class RLTradingEnv(gym.Env):
         self.action_space = spaces.Discrete(3)
 
         # Prices contains the returns for the last n_lag prices
-        self.observation_space = spaces.Box(
-            low=0, high=1, shape=(self.n_lag, 6), dtype=np.float64)
+        obs_low = -5*np.ones(self.n_lag)
+        obs_high = 5*np.ones(self.n_lag)
+        self.observation_space = spaces.Box(obs_low, obs_high, dtype=np.float64)
 
         # Either 'pnl' or 'sharpe'
         self.reward_mode = reward_mode
@@ -63,7 +64,7 @@ class RLTradingEnv(gym.Env):
         self.obs.append(new_return)
         self.last_price = self.price
         self.price += new_return
-        return self.obs
+        return np.array(self.obs)
 
     def _take_action(self, action):
         current_price = self.price
@@ -182,7 +183,7 @@ class RLTradingEnvBM_Cyclical(RLTradingEnv):
 
 class RLTradingEnvFBM(RLTradingEnv):
     def __init__(self):
-        super().__init__(n_lag=5)
+        super().__init__(n_lag=50)
         self.drift = 0 * ONE_PCT
         self.vol = 5
 
@@ -326,12 +327,9 @@ class RLTradingEnvFBMAutoCorr(RLTradingEnvFBM):
     def __init__(self):
         super().__init__()
         self.n_autocorr = 3
-        self.observation_space = spaces.Box(
-            low=0,
-            high=1,
-            shape=(self.n_lag+self.n_autocorr, 6),
-            dtype=np.float64,
-            )
+        obs_low = -5*np.ones(self.n_lag+self.n_autocorr)
+        obs_high = 5*np.ones(self.n_lag+self.n_autocorr)
+        self.observation_space = spaces.Box(obs_low, obs_high, dtype=np.float64)
 
     def _next_observation(self):
         self.obs_ret.popleft()
